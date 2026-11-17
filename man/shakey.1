@@ -1,0 +1,154 @@
+.TH SHAKEY 1 "2026-11-17" "shakey 1.0" "Terminal any key"
+
+.SH NAME
+shakey \- terminal any key reader
+
+.SH SYNOPSIS
+.B shakey
+.RB [ \-bcns ]
+.RB [ \-p
+.IR text ]
+.RB [ \-t
+.IR time-in-seconds ]
+
+.SH DESCRIPTION
+.B shakey
+(shell anykey) is a small C program that waits for a single keypress
+without requiring the Enter key.
+
+.PP
+When a key is pressed,
+.B shakey
+writes that key to stdout and ends the sleep early.
+If no key is pressed within the specified time,
+.B shakey
+exits after the timeout.
+
+.PP
+.B shakey
+behaves like the standard
+.B sleep
+command, but allows the wait period to be interrupted by a single
+keypress and returns that key on stdout.
+
+.PP
+Fractional seconds are supported, for example:
+
+.PP
+.nf
+shakey -t 1.22
+.fi
+
+.PP
+.B shakey
+is part of the
+.B shui-tools
+collection.
+
+.SH OPTIONS
+.TP
+.B \-h
+Show a short usage message.
+
+.TP
+.BI \-t " time"
+Time to sleep in seconds; fractional values are allowed.
+
+If set to
+.BR 0 ,
+the maximum wait time of one year is used.
+
+.TP
+.BI \-p " text"
+Display
+.I text
+as a prompt.
+
+.TP
+.B \-b
+Display the prompt in reverse video.
+
+.TP
+.B \-c
+Show the cursor.
+
+.TP
+.B \-n
+Output the hexadecimal key sequence.
+
+.TP
+.B \-s
+Output the key mapping.
+
+.PP
+By default, both the hexadecimal key sequence and the key mapping are
+shown.
+
+.SH EXAMPLES
+Wait for user input while monitoring media playback:
+
+.PP
+.nf
+url=$(selectmusicstream)
+duration=$(send_to_upnp_speaker "${url}")
+
+while true
+do
+    key=$(shakey -t "${duration}" -s \\
+        -p "+/Vol up -/Vol down")
+
+    if [ "${key}" = "q" ]; then
+        break
+    fi
+
+    if [ "${key}" = "+" ]; then
+        incvolume
+    fi
+
+    if [ "${key}" = "-" ]; then
+        decvolume
+    fi
+
+    duration=$(get_remaining_duration)
+done
+.fi
+
+.PP
+Request confirmation from the user:
+
+.PP
+.nf
+file="file.txt"
+
+answer=$(shakey -csp \\
+    "Do you really want to delete ${file}? (y/n): ")
+.fi
+
+.PP
+Select an entry using a single key:
+
+.PP
+.nf
+printf "%s\\n%s\\n%s\\n" \\
+    "1. Blue" \\
+    "2. Green" \\
+    "3. Red"
+
+shakey -bsp "Select a color (1-3): "
+.fi
+
+.SH BUGS
+Probably.
+
+.SH AUTHOR
+Written by Manfred Güntner.
+
+.SH REPORTING BUGS
+https://github.com/manfredguentner/shui-tools/issues
+
+.SH COPYRIGHT
+Copyright \(co 2026 Manfred Güntner.
+
+.PP
+This software is distributed under the BSD 2-Clause License;
+see the LICENSE file.

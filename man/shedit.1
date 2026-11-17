@@ -1,0 +1,143 @@
+.TH SHEDIT 1 "2026-11-16" "shedit 1.0" "Terminal text input"
+
+.SH NAME
+shedit \- terminal text input
+
+.SH SYNOPSIS
+.B shedit
+.RB [ \-bhx ]
+.RB [ \-r
+.IR height ]
+.RB [ \-p
+.IR text ]
+
+.SH DESCRIPTION
+.B shedit
+is a terminal text input program.
+Unlike an editor it is not using the whole terminal.
+It opens at the cursor position and waits for text input.
+
+.PP
+On submit the whole text is printed to stdout.
+
+.PP
+On start a text can be preloaded from stdin.
+See examples.
+
+.PP
+.B shedit
+is meant to be a simple input program.
+There is only minimal editing with backspace and cursor keys.
+But it is possible to call your editor from
+.BR $EDITOR .
+
+.PP
+.B shedit
+is part of the
+.B shui-tools
+collection.
+
+.SH OPTIONS
+.TP
+.B \-h
+Show a short usage message.
+
+.TP
+.BI \-r " lines"
+Defines the height of the input field.
+A value of
+.B 0
+uses the whole terminal.
+The default is
+.BR 3 .
+
+.TP
+.B \-x
+By default,
+.B Ctrl-D
+or
+.B Esc d
+are the submit keys.
+With
+.BR \-x ,
+the
+.B Enter
+key becomes a submit key.
+
+.TP
+.B \-b
+Display the status bar in reverse video.
+
+.TP
+.BI \-p " text"
+Set the status bar text.
+
+.SH COMMANDS
+.TP
+.B Ctrl-J
+Insert a newline.
+
+.TP
+.B Ctrl-E
+or
+.B Esc e
+Open the editor specified in
+.BR $EDITOR .
+
+.TP
+.B Ctrl-X
+or
+.B Esc
+or
+.B Esc q
+or
+.B Esc x
+Abort without saving the text and exit with return code 1.
+
+.TP
+.B Ctrl-D
+or
+.B Esc d
+Submit the text and exit with return code 0.
+
+.SH EXAMPLES
+Wait for a message to be typed:
+
+.PP
+.nf
+chat=$(shedit)
+.fi
+
+.PP
+Preload
+.I intro.txt
+with a height of 10 lines:
+
+.PP
+.nf
+chat=$(shedit -r10 < intro.txt)
+.fi
+
+.PP
+Edit a stream before saving:
+
+.PP
+.nf
+jq '.[]' file.json | shedit -r20 > new.json
+.fi
+
+.SH BUGS
+Probably.
+
+.SH AUTHOR
+Written by Manfred Güntner.
+
+.SH REPORTING BUGS
+https://github.com/manfredguentner/shui-tools/issues
+
+.SH COPYRIGHT
+Copyright \(co 2026 Manfred Güntner.
+
+.PP
+This software is distributed under the BSD 2-Clause License;
+see the LICENSE file.

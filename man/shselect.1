@@ -1,0 +1,174 @@
+.TH SHSELECT 1 "2026-11-17" "shselect 1.0" "User Commands"
+
+.SH NAME
+shselect \- terminal selector and pager
+
+.SH SYNOPSIS
+.B shselect
+.RB [ \-bchmnsv ]
+.RB [ \-r
+.IR height ]
+.RB [ \-p
+.IR text ]
+
+.SH DESCRIPTION
+.B shselect
+is a pager and selector.
+It reads input from a pipe or standard input and displays the content in
+an interactive terminal interface.
+The user can move through the list, select entries, and return the
+selected line(s) or line number(s) to the calling script.
+
+.PP
+The tool is intended for use in POSIX shell scripts where an interactive
+selector is useful.
+Depending on the options,
+.B shselect
+can return selected lines, their line numbers, or both.
+When multiselect mode is enabled, multiple entries may be marked and
+returned.
+
+.PP
+.B shselect
+is part of the
+.B shui-tools
+collection.
+
+.SH OPTIONS
+.TP
+.B \-h
+Show usage information.
+
+.TP
+.BI \-r " lines"
+Set the height of the selection area in lines.
+A value of
+.B 0
+uses the entire terminal height.
+The default is
+.BR 4 .
+
+.TP
+.BI \-p " text"
+Set the status bar text.
+
+.TP
+.B \-c
+Show a cursor in the first column instead of highlighting the current
+line using reverse video.
+
+.TP
+.B \-b
+Display the status bar in reverse video.
+
+.TP
+.B \-m
+Enable multiselect mode.
+When enabled, entries may be marked or unmarked.
+
+.TP
+.B \-n
+Return only the line number of the selected entry.
+
+.TP
+.B \-s
+Return only the selected line itself.
+
+.PP
+By default, both the line number and the line content are returned.
+
+.TP
+.B \-v
+Leaving with
+.B x
+or
+.B q
+also returns the string on which the cursor was positioned.
+
+.SH INTERACTIVE KEYS
+While viewing a list, the following keys are available:
+
+.TP
+.B Right, PageDown
+Move forward one window.
+
+.TP
+.B Left, PageUp
+Move backward one window.
+
+.TP
+.B Down
+Move down one line.
+
+.TP
+.B Up
+Move up one line.
+
+.TP
+.B HOME
+Move to the first line.
+
+.TP
+.B END
+Move to the last line.
+
+.TP
+.B Enter
+Select and exit.
+
+.TP
+.B q
+Exit without selection (return code 0).
+
+.TP
+.B x
+Exit without selection (return code 10).
+
+.TP
+.BR m ", " s ", " +
+Toggle mark (multiselect mode only).
+
+.PP
+Exiting with
+.B x
+returns exit code 10 and can be used as a “go back” signal in scripts.
+
+.SH EXAMPLES
+Select a file from a directory listing:
+
+.PP
+.nf
+ls -a . | shselect -s
+.fi
+
+.PP
+Select from a list of strings:
+
+.PP
+.nf
+printf "%s\\n%s\\n%s\\n" "One" "Two" "Three" | shselect -sb
+.fi
+
+.PP
+Possible usage in a shell script:
+
+.PP
+.nf
+key=$(printf "%s" "${radiostations}" | shselect -bs)
+.fi
+
+.SH BUGS
+Probably.
+
+.SH AUTHOR
+Written by Manfred Güntner.
+
+.SH REPORTING BUGS
+https://github.com/manfredguentner/shui-tools/issues
+
+.SH COPYRIGHT
+Copyright \(co 2026 Manfred Güntner.
+
+.PP
+This software is distributed under the BSD 2-Clause License;
+see the LICENSE file.
