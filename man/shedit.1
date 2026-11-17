@@ -72,6 +72,10 @@ Display the status bar in reverse video.
 .BI \-p " text"
 Set the status bar text.
 
+.TP
+.B \-o
+Turns shedit into a one line input. Enter is submit and all keys for editor or newline are disabled.
+
 .SH COMMANDS
 .TP
 .B Ctrl-J
@@ -124,6 +128,14 @@ Edit a stream before saving:
 .PP
 .nf
 jq '.[]' file.json | shedit -r20 > new.json
+.fi
+
+.PP
+Edit a filename
+
+.PP
+.nf
+new_filename=$(printf "${filename}" | shedit -o)
 .fi
 
 .SH BUGS
