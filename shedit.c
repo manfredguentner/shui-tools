@@ -5,6 +5,7 @@
 /* The UTF-8 support RFC-3629 and Markus Kuhn wcwidth.c was created
    with the help of AI */
 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -765,6 +766,8 @@ void usage(char *prog) {
   printf("  -b         Display the status bar in reverse video\n");
   printf("  -p text    Set the status bar text\n");
   printf("  -r height  Number of visible rows (default: 3)\n");
+  printf("  -o         Turns shedit into a one line input\n");
+  printf("             sets -r1 -x disables the control squences\n");
 }
 
 /* main */
@@ -779,13 +782,15 @@ int main(int argc, char **argv) {
       "ctrl-x abort";
  
   int ekey = 0;
+  int pflag = 0;
   int bflag = 0;
+  int oflag = 0;  
 
   /* getopt */
   int op;
   opterr = 0;
 
-  while ((op = getopt(argc, argv, "bhxr:p:")) != -1) {
+  while ((op = getopt(argc, argv, "bhxr:p:o")) != -1) {
     char *end;
 
     switch (op) {
@@ -796,6 +801,7 @@ int main(int argc, char **argv) {
         bflag = 1;
         break;
       case 'p':
+        pflag = 1;
         snprintf(status_prompt, sizeof(status_prompt), "%s", optarg);
         break;
       case 'r':
@@ -807,12 +813,17 @@ int main(int argc, char **argv) {
         break;
       case 'x':
         ekey = 1;
-        char sp[1024] =
-            "ctrl-j newline "
-            "enter submit "
-            "ctrl-e editor "
-            "ctrl-x abort";
-        snprintf(status_prompt, sizeof(status_prompt), "%s", sp);
+        if (pflag == 0) {
+          char sp[1024] =
+              "ctrl-j newline "
+              "enter submit "
+              "ctrl-e editor "
+              "ctrl-x abort";
+          snprintf(status_prompt, sizeof(status_prompt), "%s", sp);
+        }
+        break;
+      case 'o':
+        oflag = 1;
         break;
       case '?':
         if (optopt == 'r' || optopt == 'p')
@@ -827,6 +838,16 @@ int main(int argc, char **argv) {
     }
   }
   /* getopt end */
+
+  /* -o overrides all options */
+  if (oflag == 1) {
+    ekey = 1;
+    EDITOR_HEIGHT = 1;
+    if (pflag == 0) {
+      char zp[30] = "enter submit esc cancel";
+      snprintf(status_prompt, sizeof(status_prompt), "%s", zp);
+    }
+  }
 
   /* init the textbuffer & frame buffer */
   Buffer *buf = init_buffer();
@@ -932,9 +953,9 @@ int main(int argc, char **argv) {
     unsigned char uc = 0;
     if (in_read_byte(&in, &uc) <= 0) break;
 
-    if (uc == 3 || uc == 4) {
+    if ((uc == 3 || uc == 4) && (oflag == 0)) {
       running = 0;
-    } else if (uc == 5) {
+    } else if (uc == 5 && oflag == 0) {
       if (call_editor(buf, td, &orig_termios) == -1) {
         escaped = 1;
         running = 0;
@@ -956,7 +977,7 @@ int main(int argc, char **argv) {
       } else {
         running = 0;
       }
-    } else if (uc == 10) {
+    } else if (uc == 10 && oflag == 0) {
       /* CTRL-J: New empty row below the current row */
       size_t p = byte_pos;
       while (p < buf->length && buf->data[p] != '\n') p++;
@@ -964,7 +985,7 @@ int main(int argc, char **argv) {
       if (p < buf->length && buf->data[p] == '\n') {
         insert_at(buf, p + 1, "\n");
         byte_pos = p + 1;
-      } else {
+      }else {
         insert_at(buf, p, "\n");
         byte_pos = p + 1;
       }
@@ -972,8 +993,9 @@ int main(int argc, char **argv) {
       if (byte_pos > 0) {
         size_t ls = byte_pos;
         while (ls > 0 && buf->data[ls - 1] != '\n') ls--;
-        size_t p = (byte_pos > ls) ? utf8_prev_grapheme(buf->data, ls, byte_pos)
-                                   : byte_pos - 1;
+        size_t p = (byte_pos > ls) ? utf8_prev_grapheme(buf->data, ls, 
+                    byte_pos) : byte_pos - 1;
+
         size_t len = byte_pos - p;
         memmove(buf->data + p, buf->data + byte_pos, 
                 buf->length - byte_pos + 1);
@@ -989,9 +1011,9 @@ int main(int argc, char **argv) {
           if (c1 == 'x' || c1 == 'q') {
             escaped = 1;
             running = 0;
-          } else if (c1 == 'd') {
+          } else if (c1 == 'd' && oflag == 0) {
             running = 0;
-          } else if (c1 == 'e') {
+          } else if (c1 == 'e' && oflag == 0) {
             if (call_editor(buf, td, &orig_termios) == -1) {
               escaped = 1;
               running = 0;
