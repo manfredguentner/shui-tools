@@ -17,6 +17,8 @@
 #include <stdint.h>
 
 int SELECT_HEIGHT = 4;
+/* set to 0 to disable status line */
+int STATUS_HEIGHT = 1; 
 
 typedef struct {
   char **items;
@@ -26,14 +28,15 @@ typedef struct {
 
 static void
 usage(const char *prog) {
-  printf("Usage: %s [-bchmnsv] [-r height] [-p text]\n", prog);
-  printf("  -b         Display the status bar in reverse video\n");
+  printf("Usage: %s [-bcghmnsv] [-r height] [-p text]\n", prog);
+  printf("  -b         Display the bottom bar in reverse video\n");
+  printf("  -g         Disable the bottom bar\n");
   printf("  -c         Show the cursor in the first column instead of\n");
   printf("             using reverse video\n");
   printf("  -h         Display this help message\n");
   printf("  -m         Enable multi-selection mode\n");
   printf("  -n         Output the selected line number\n");
-  printf("  -p text    Set the status bar text\n");
+  printf("  -p text    Set the bottom bar text\n");
   printf("  -r height  Number of visible rows (default: 4)\n");
   printf("  -s         Output the selected line text\n");
   printf("  -v         When exiting with 'x' or 'q', output the line\n");
@@ -265,9 +268,11 @@ main(int argc, char **argv) {
   int vflag = 0;
   int nflag = 0;
   int sflag = 0;
-  char status_prompt[1024] = "< back > forward ^ up v down enter submit q quit";
+  char status_prompt[1024] = 
+        "* < back . > forward . ^ up . v down . enter submit . q quit *";
+  int pret = 0;
 
-  while ((op = getopt(argc, argv, "bchmnsvr:p:")) != -1) {
+  while ((op = getopt(argc, argv, "bcghmnsvr:p:")) != -1) {
     char *end;
 
     switch (op) {
@@ -279,6 +284,9 @@ main(int argc, char **argv) {
         break;
       case 'c':
         rvflag = 1;
+        break;
+      case 'g':
+        STATUS_HEIGHT = 0;
         break;
       case 'm':
         multi = 1;
@@ -301,7 +309,10 @@ main(int argc, char **argv) {
         }
         break;
       case 'p':
-        snprintf(status_prompt, sizeof(status_prompt), "%s", optarg);
+        pret = snprintf(status_prompt, sizeof(status_prompt), "%s", optarg);
+        if (pret == 0) {
+          STATUS_HEIGHT = 0;
+        }
         break;
       case '?':
         if (optopt == 'r' || optopt == 'p') {
@@ -452,7 +463,7 @@ main(int argc, char **argv) {
     SELECT_HEIGHT = w.ws_row;
   }
   /* addon for status_prompt */
-  int has_status = (w.ws_row > 1);
+  int has_status = (STATUS_HEIGHT > 0);
 
   /* set terminal into raw mode */
   struct termios oldt, newt;
@@ -517,7 +528,7 @@ main(int argc, char **argv) {
     visible_rows = 1;
   }
 
-  int total_rows = visible_rows + has_status;
+  int total_rows = visible_rows + (has_status ? STATUS_HEIGHT : 0);
   int start_row = row;
   if (row + total_rows - 1 > w.ws_row) {
     int k;
@@ -552,9 +563,7 @@ main(int argc, char **argv) {
      
       if (bflag ) {
         write_str(tty_fd, "\x1B[7m");
-      } else {
-        write_str(tty_fd, "\x1B[2m");
-      }
+      } 
       write_truncated(tty_fd, status_prompt,
                       w.ws_col > 0 ? (size_t)w.ws_col - 1 : 0);
       write_str(tty_fd, "\x1B[K");
