@@ -1,174 +1,133 @@
 .TH SHSELECT 1 "2026-11-17" "shselect 1.0" "User Commands"
-
 .SH NAME
 shselect \- terminal selector and pager
-
 .SH SYNOPSIS
 .B shselect
-.RB [ \-bchmnsv ]
-.RB [ \-r
-.IR height ]
-.RB [ \-p
-.IR text ]
-
+[\fB\-bcghmnsv\fR]
+[\fB\-r\fR \fIlines\fR]
+[\fB\-p\fR \fItext\fR]
 .SH DESCRIPTION
 .B shselect
-is a pager and selector.
-It reads input from a pipe or standard input and displays the content in
-an interactive terminal interface.
-The user can move through the list, select entries, and return the
-selected line(s) or line number(s) to the calling script.
-
+is a pager and selector. It reads input from a pipe or stdin and
+displays the content in an interactive terminal interface. The user
+can move through the list, select entries, and return the selected
+line(s) or line number(s) to the calling script.
 .PP
-The tool is intended for use in POSIX shell scripts where an interactive
-selector is useful.
-Depending on the options,
+The tool is intended for use in POSIX shell scripts where an
+interactive selector is useful. Depending on the options,
 .B shselect
-can return selected lines, their line numbers, or both.
-When multiselect mode is enabled, multiple entries may be marked and
+can return selected lines, their line numbers, or both. When
+multiselect mode is enabled, multiple entries may be marked and
 returned.
-
 .PP
 .B shselect
-is part of the
-.B shui-tools
-collection.
-
+is part of the shui-tools collection.
 .SH OPTIONS
+.TP
+.B \-b
+Display the bottom bar in reverse video.
+.TP
+.B \-c
+Show the cursor in the first column instead of a reverse-video line.
+.TP
+.B \-g
+Disable the bottom bar.
 .TP
 .B \-h
 Show usage information.
-
-.TP
-.BI \-r " lines"
-Set the height of the selection area in lines.
-A value of
-.B 0
-uses the entire terminal height.
-The default is
-.BR 4 .
-
-.TP
-.BI \-p " text"
-Set the status bar text.
-
-.TP
-.B \-c
-Show a cursor in the first column instead of highlighting the current
-line using reverse video.
-
-.TP
-.B \-b
-Display the status bar in reverse video.
-
 .TP
 .B \-m
-Enable multiselect mode.
-When enabled, entries may be marked or unmarked.
-
+Enable multiselect mode. When enabled, entries may be marked or
+unmarked.
 .TP
 .B \-n
 Return only the line number of the selected entry.
-
+.TP
+\fB\-p\fR \fItext\fR
+Set the bottom bar text.
+.TP
+\fB\-r\fR \fIlines\fR
+Set the height of the selection area in lines.
+A value of 0 uses the entire terminal height. The default is 4.
 .TP
 .B \-s
 Return only the selected line itself.
-
-.PP
-By default, both the line number and the line content are returned.
-
+By default (without \fB\-n\fR or \fB\-s\fR), both the line number
+and the line content are returned.
 .TP
 .B \-v
-Leaving with
-.B x
-or
-.B q
-also returns the string on which the cursor was positioned.
-
+When exiting with \fBx\fR or \fBq\fR, also return the line the cursor
+was on.
 .SH INTERACTIVE KEYS
 While viewing a list, the following keys are available:
-
-.TP
+.RS 4
+.TP 19
 .B Right, PageDown
 Move forward one window.
-
 .TP
 .B Left, PageUp
 Move backward one window.
-
 .TP
 .B Down
 Move down one line.
-
 .TP
 .B Up
 Move up one line.
-
 .TP
-.B HOME
+.B Home
 Move to the first line.
-
 .TP
-.B END
+.B End
 Move to the last line.
-
 .TP
 .B Enter
 Select and exit.
-
 .TP
 .B q
-Exit without selection (return code 0).
-
+Exit without selection (return 0).
 .TP
 .B x
-Exit without selection (return code 10).
-
+Exit without selection (return 10).
 .TP
-.BR m ", " s ", " +
+.B m, s, +
 Toggle mark (multiselect mode only).
-
+.RE
 .PP
-Exiting with
-.B x
-returns exit code 10 and can be used as a “go back” signal in scripts.
-
+Exiting with \fBx\fR returns 10 and can be used as a \(lqgo back\(rq
+signal in scripts.
 .SH EXAMPLES
 Select a file from a directory listing:
-
 .PP
+.RS 4
 .nf
-ls -a . | shselect -s
+ls \-a . | shselect \-s
 .fi
-
+.RE
 .PP
 Select from a list of strings:
-
 .PP
+.RS 4
 .nf
-printf "%s\\n%s\\n%s\\n" "One" "Two" "Three" | shselect -sb
+printf "%s\en%s\en%s\en" "One" "Two" "Three" | shselect \-sb
 .fi
-
+.RE
 .PP
 Possible usage in a shell script:
-
 .PP
+.RS 4
 .nf
-key=$(printf "%s" "${radiostations}" | shselect -bs)
+key=$(printf "${radiostations}" | shselect \-bs)
 .fi
-
+.RE
 .SH BUGS
 Probably.
-
 .SH AUTHOR
-Written by Manfred Güntner.
-
+Written by Manfred G\(:untner.
 .SH REPORTING BUGS
 https://github.com/manfredguentner/shui-tools/issues
-
 .SH COPYRIGHT
-Copyright \(co 2026 Manfred Güntner.
+Copyright \(co 2026 Manfred G\(:untner.
+.br
+This software is distributed under the BSD 2-Clause License; see
+the LICENSE file.
 
-.PP
-This software is distributed under the BSD 2-Clause License;
-see the LICENSE file.
