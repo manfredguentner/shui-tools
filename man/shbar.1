@@ -1,0 +1,62 @@
+.TH shbar 1 "2026-11-18" "shbar 1.0" "terminal status, header and divider bar"
+.SH NAME
+shbar \- a divider and status or header bar for the terminal
+.SH SYNOPSIS
+.B shbar
+.RB [ \-bh ]
+.RB [ \-c
+.IR char ]
+.RB [ \-p
+.IR text ]
+.SH DESCRIPTION
+.B shbar
+is a small C program that can be used as a visual divider, header, or bottom bar.
+It always fills to the end of the terminal's width.
+.PP
+There are some minimal options to customize it.
+.PP
+.B shbar
+is part of the
+.I shui\-tools
+collection.
+.SH OPTIONS
+.TP
+.B \-b
+Turn on reverse video for
+.B \-p
+.IR text .
+.TP
+.BI \-c " char"
+Use a different filler character.
+The default is an underscore
+.RB ( _ ).
+A space character
+.RB ( \(dq\ \(dq )
+is also possible.
+.TP
+.B \-h
+Show a short usage message.
+.TP
+.BI \-p " text"
+Display
+.I text
+as a prompt.
+.SH EXAMPLES
+.EX
+status="[ load 3% : t/sec 49 : source.c ] "
+shbar \-p "${status}"
+
+shbar \-bp "Result as follows: " \-c " "
+cat result.txt | less \-r +G
+.EE
+.SH BUGS
+Probably.
+.SH AUTHOR
+Written by Manfred G\[:u]ntner.
+.SH REPORTING BUGS
+.UR https://github.com/manfredguentner/shui-tools/issues
+.UE
+.SH COPYRIGHT
+Copyright \(co 2026 Manfred G\[:u]ntner
+.br
+This software is distributed under the BSD 2\-Clause License; see the LICENSE file.
