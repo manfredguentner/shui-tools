@@ -3,28 +3,30 @@
 shedit \- terminal text input
 .SH SYNOPSIS
 .B shedit
-[\fB\-bghox\fR]
-[\fB\-r\fR \fIlines\fR]
-[\fB\-p\fR \fItext\fR]
+.RB [ \-bghowx ]
+.RB [ \-r
+.IR rows ]
+.RB [ \-p
+.IR text ]
 .SH DESCRIPTION
 .B shedit
-is a terminal text input program. Unlike an editor, it does not use
-the whole terminal. It opens at the cursor position and waits for
-text input.
+is a terminal text input program. Unlike an editor it is not using the whole
+terminal. It opens at the cursor position and waits for text input.
 .PP
-On submit, the whole text is printed to stdout.
+On submit the whole text is printed to stdout.
 .PP
-On start, text can be preloaded from stdin. See
+On start a text can be preloaded from stdin. See
 .BR EXAMPLES .
 .PP
 .B shedit
-is meant to be a simple input program. It provides only minimal
-editing with backspace and the cursor keys, though it is possible
-to invoke the editor set in
+is meant to be a simple input program. There is only minimal editing with
+backspace and cursor keys. But it is possible to call your editor from
 .BR $EDITOR .
 .PP
 .B shedit
-is part of the shui-tools collection.
+is part of the
+.B shui\-tools
+collection.
 .SH OPTIONS
 .TP
 .B \-b
@@ -37,77 +39,81 @@ Disable the bottom bar.
 Show a short usage message.
 .TP
 .B \-o
-Turn
+Turns
 .B shedit
-into a single-line input. Enter submits the text, and all keys for
-invoking the editor or inserting a newline are disabled.
-\er and \en are stripped from stdin input.
+into a one line input.
+Enter is submit and all keys for editor or newline are disabled.
+\er\en are removed from stdin input.
 .TP
-\fB\-p\fR \fItext\fR
+.BI \-p " text"
 Set the bottom bar text.
 .TP
-\fB\-r\fR \fIlines\fR
-Define the height of the input field in lines.
-0 uses the whole terminal. The default is 3.
+.BI \-r " lines"
+Defines the height of the input field.
+0 uses the whole terminal. 3 is default.
+.TP
+.B \-w
+Enables line wrap.
 .TP
 .B \-x
-By default, CTRL-D or ESC d submit the text. With
-.BR \-x ,
-Enter acts as a submit key.
+Default CTRL\-D or ESC d are the submit keys.
+With
+.B \-x
+Enter is a submit key.
 .SH COMMANDS
 .TP
-.B CTRL-J
+.B CTRL\-J
 Insert a newline.
 .TP
-\fBCTRL-E\fR or \fBESC e\fR
-Open the editor configured in
+.BR CTRL\-E " or " "ESC e"
+Open the editor set up in
 .BR $EDITOR .
 .TP
-\fBCTRL-X\fR or \fBESC\fR or \fBESC q\fR or \fBESC x\fR
-Abort without saving the text and exit with status 1.
+.BR CTRL\-X " or " ESC " or " "ESC q" " or " "ESC x"
+Aborts without saving the text with return code 1.
 .TP
-\fBCTRL-D\fR or \fBESC d\fR
-Submit the text and exit with status 0.
+.BR CTRL\-D " or " "ESC d"
+Submit the text with return code 0.
 .SH EXAMPLES
 Wait for a message to be typed:
 .PP
 .RS 4
-.nf
+.EX
 chat=$(shedit)
-.fi
+.EE
 .RE
 .PP
 Preload intro.txt with a height of 10 lines:
 .PP
 .RS 4
-.nf
+.EX
 chat=$(shedit \-r10 <intro.txt)
-.fi
+.EE
 .RE
 .PP
 Edit a stream before saving:
 .PP
 .RS 4
-.nf
+.EX
 jq '.[]' file.json | shedit \-r 20 >new.json
-.fi
+.EE
 .RE
 .PP
 Edit a filename:
 .PP
 .RS 4
-.nf
+.EX
 new_name=$(printf "filename.txt" | shedit \-o)
-.fi
+.EE
 .RE
 .SH BUGS
 Probably.
 .SH AUTHOR
-Written by Manfred G\(:untner.
-.SH REPORTING BUGS
-https://github.com/manfredguentner/shui-tools/issues
+Written by Manfred Güntner
+.SH "REPORTING BUGS"
+https://github.com/manfredguentner/shui\-tools/issues
 .SH COPYRIGHT
-Copyright \(co 2026 Manfred G\(:untner.
+Copyright \(co 2026 Manfred Güntner.
 .br
-This software is distributed under the BSD 2-Clause License; see the
+This software is distributed under the BSD 2\-Clause License; see the
 LICENSE file.
