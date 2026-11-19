@@ -31,6 +31,8 @@ int lbuflen;
 int EDITOR_HEIGHT = 3;
 /* height of the status line (0 to hide) */
 int THEIGHT = 1;
+/* wrap == 0 is nowwrap. wrap == 1 is wrap */
+int wrap = 0;
  
 typedef struct {
   char *data;
@@ -446,6 +448,157 @@ static int in_wait_byte(InputBuf *in, unsigned char *out, int timeout_ms) {
   if (r <= 0) return 0;
   return in_read_byte(in, out);
 }
+
+static void next_visual_row(const char *s, size_t len, size_t start,
+                            int view_width, size_t *row_end_out,
+                            size_t *next_start_out, int *wrapped_out) {
+  size_t p = start;
+  int col = 0;
+  int wrapped = 0;
+
+  while (p < len) {
+    if (s[p] == '\n') {
+      break;
+    }
+    int w = 0;
+    size_t glen = utf8_next_grapheme(s, len, p, &w);
+    if (glen == 0) break;
+
+    if (col > 0 && col + w > view_width) {
+      wrapped = 1;
+      break;
+    }
+    col += w;
+    p += glen;
+  }
+
+  *row_end_out = p;
+  *wrapped_out = wrapped;
+  if (wrapped) {
+    *next_start_out = p;
+  } else if (p < len && s[p] == '\n') {
+    *next_start_out = p + 1;
+  } else {
+    *next_start_out = p;
+  }
+}
+
+static size_t move_to_visual_col(const char *s, size_t row_start,
+                                 size_t row_end, int row_wrapped,
+                                 int target_col) {
+  size_t final_p = row_start;
+  int count = 0;
+  while (final_p < row_end) {
+    int cw = 0;
+    size_t glen = utf8_next_grapheme(s, row_end, final_p, &cw);
+    if (glen == 0) break;
+    /* Bei hartem Umbruch ohne '\n' gehoert row_end schon zur naechsten Zeile */
+    if (row_wrapped && final_p + glen >= row_end) {
+      break;
+    }
+    if (cw > 0 && count + cw > target_col) break;
+    if (count >= target_col && cw == 0) break;
+    count += cw;
+    final_p += glen;
+  }
+  return final_p;
+}
+
+static size_t move_visual_up(const Buffer *b, size_t byte_pos, int view_width) {
+  if (byte_pos == 0) return 0;
+
+  size_t cur_ls = byte_pos;
+  while (cur_ls > 0 && b->data[cur_ls - 1] != '\n') {
+    cur_ls--;
+  }
+
+  size_t rs = cur_ls;
+  size_t prev_rs = 0, prev_re = 0;
+  int prev_wrapped = 0;
+  int has_prev = 0;
+  size_t cur_rs = cur_ls, cur_re = cur_ls;
+
+  while (1) {
+    size_t re = 0, ns = 0;
+    int wrapped = 0;
+    next_visual_row(b->data, b->length, rs, view_width, &re, &ns, &wrapped);
+    if (byte_pos < re || (!wrapped && byte_pos == re) || ns == rs) {
+      cur_rs = rs;
+      cur_re = re;
+      break;
+    }
+    prev_rs = rs;
+    prev_re = re;
+    prev_wrapped = wrapped;
+    has_prev = 1;
+    rs = ns;
+  }
+
+  if (!has_prev) {
+    if (cur_ls == 0) return 0;
+
+    size_t prev_ls = cur_ls - 1;
+    while (prev_ls > 0 && b->data[prev_ls - 1] != '\n') {
+      prev_ls--;
+    }
+    size_t p_rs = prev_ls;
+    while (1) {
+      size_t re = 0, ns = 0;
+      int wrapped = 0;
+      next_visual_row(b->data, b->length, p_rs, view_width,
+                      &re, &ns, &wrapped);
+      prev_rs = p_rs;
+      prev_re = re;
+      prev_wrapped = wrapped;
+      if (!wrapped || ns >= cur_ls || ns == p_rs) {
+        break;
+      }
+      p_rs = ns;
+    }
+  }
+
+  int target_col = get_col_at(b->data, cur_re, cur_rs, byte_pos);
+  return move_to_visual_col(b->data, prev_rs, prev_re, prev_wrapped, target_col);
+}
+
+static size_t move_visual_down(const Buffer *b, size_t byte_pos,
+                               int view_width) {
+  size_t cur_ls = byte_pos;
+  while (cur_ls > 0 && b->data[cur_ls - 1] != '\n') {
+    cur_ls--;
+  }
+
+  size_t rs = cur_ls;
+  size_t cur_rs = cur_ls, cur_re = cur_ls, cur_ns = cur_ls;
+  int cur_wrapped = 0;
+
+  while (1) {
+    size_t re = 0, ns = 0;
+    int wrapped = 0;
+    next_visual_row(b->data, b->length, rs, view_width, &re, &ns, &wrapped);
+    if (byte_pos < re || (!wrapped && byte_pos == re) || ns == rs) {
+      cur_rs = rs;
+      cur_re = re;
+      cur_ns = ns;
+      cur_wrapped = wrapped;
+      break;
+    }
+    rs = ns;
+  }
+
+  if (!cur_wrapped && cur_re == b->length) {
+    return b->length;
+  }
+
+  size_t next_rs = cur_ns;
+  size_t next_re = next_rs, unused_ns = next_rs;
+  int next_wrapped = 0;
+  next_visual_row(b->data, b->length, next_rs, view_width,
+                  &next_re, &unused_ns, &next_wrapped);
+
+  int target_col = get_col_at(b->data, cur_re, cur_rs, byte_pos);
+  return move_to_visual_col(b->data, next_rs, next_re, next_wrapped, target_col);
+}
  
 void render(int td, Buffer *frame, Buffer *b, int start_row, int start_col,
             size_t byte_pos, int term_width, const char *sprompt, 
@@ -459,18 +612,36 @@ void render(int td, Buffer *frame, Buffer *b, int start_row, int start_col,
   if (view_width < 1) view_width = 1;
  
   /* 1. calculate the absolute visual cursor position (row and col in text) */
-  size_t it = 0;
-  while (it < byte_pos && it < b->length) {
-    if (b->data[it] == '\n') {
+  if (wrap == 0) {
+    size_t it = 0;
+    while (it < byte_pos && it < b->length) {
+      if (b->data[it] == '\n') {
+        row++;
+        col = 0;
+        it++;
+      } else {
+        int w = 0;
+        size_t glen = utf8_next_grapheme(b->data, byte_pos, it, &w);
+        if (glen == 0) break;
+        col += w;
+        it += glen;
+      }
+    }
+  } else {
+    size_t rs = 0;
+    while (1) {
+      size_t re = 0, ns = 0;
+      int wrapped = 0;
+      next_visual_row(b->data, b->length, rs, view_width, &re, &ns, &wrapped);
+      if (byte_pos < re || (!wrapped && byte_pos == re) || ns == rs) {
+        col = get_col_at(b->data, re, rs, byte_pos);
+        break;
+      }
+      rs = ns;
       row++;
-      col = 0;
-      it++;
-    } else {
-      int w = 0;
-      size_t glen = utf8_next_grapheme(b->data, byte_pos, it, &w);
-      if (glen == 0) break;
-      col += w;
-      it += glen;
+    }
+    if (col >= view_width) {
+      col = view_width - 1;
     }
   }
  
@@ -479,9 +650,9 @@ void render(int td, Buffer *frame, Buffer *b, int start_row, int start_col,
     top_line = row - EDITOR_HEIGHT + 1;
   }
  
-  /* 2. Horizontal Scroll-Offset */
+  /* 2. Horizontal Scroll-Offset (nur bei nowrap) */
   int col_offset = 0;
-  if (col >= view_width) {
+  if (wrap == 0 && col >= view_width) {
     col_offset = col - view_width + 1;
   }
  
@@ -491,9 +662,21 @@ void render(int td, Buffer *frame, Buffer *b, int start_row, int start_col,
   /* determine start of top_line only once */
   size_t cur_line_start = 0;
   int line = 0;
-  while (line < top_line && cur_line_start < b->length) {
-    if (b->data[cur_line_start] == '\n') line++;
-    cur_line_start++;
+  if (wrap == 0) {
+    while (line < top_line && cur_line_start < b->length) {
+      if (b->data[cur_line_start] == '\n') line++;
+      cur_line_start++;
+    }
+  } else {
+    while (line < top_line && cur_line_start < b->length) {
+      size_t re = 0, ns = 0;
+      int wrapped = 0;
+      next_visual_row(b->data, b->length, cur_line_start, view_width,
+                      &re, &ns, &wrapped);
+      if (ns == cur_line_start) break;
+      cur_line_start = ns;
+      line++;
+    }
   }
  
   /* 3. render rows */
@@ -501,10 +684,19 @@ void render(int td, Buffer *frame, Buffer *b, int start_row, int start_col,
   for (r = 0; r < EDITOR_HEIGHT; r++) {
     size_t line_start = cur_line_start;
     size_t line_end = line_start;
-    while (line_end < b->length && b->data[line_end] != '\n') {
-      line_end++;
+
+    if (wrap == 0) {
+      while (line_end < b->length && b->data[line_end] != '\n') {
+        line_end++;
+      }
+      cur_line_start = (line_end < b->length) ? (line_end + 1) : b->length;
+    } else {
+      size_t ns = line_start;
+      int wrapped = 0;
+      next_visual_row(b->data, b->length, line_start, view_width,
+                      &line_end, &ns, &wrapped);
+      cur_line_start = ns;
     }
-    cur_line_start = (line_end < b->length) ? (line_end + 1) : b->length;
  
     lbuflen = sprintf(lbuf, "\033[%d;%dH", start_row + r, start_col);
     buf_append(frame, lbuf, (size_t)lbuflen);
@@ -762,15 +954,16 @@ int call_editor(Buffer *buf, int tty_fd, const struct termios *orig_termios) {
 }
  
 void usage(char *prog) {
-  printf("Usage: %s [-bhx][-r rows][-p text]\n", prog);
-  printf("  -h         Display this help message\n");
-  printf("  -x         Enables ENTER as submit key\n");
+  printf("Usage: %s [-bghowx][-r rows][-p text]\n", prog);
   printf("  -b         Display the status bar in reverse video\n");
   printf("  -g         Disables the status bar\n");
-  printf("  -p text    Set the status bar text\n");
-  printf("  -r height  Number of visible rows (default: 3)\n");
+  printf("  -h         Display this help message\n");
   printf("  -o         Turns shedit into a one line input\n");
   printf("             sets -r1 -x disables the control squences\n");
+  printf("  -p text    Set the status bar text\n");
+  printf("  -r height  Number of visible rows (default: 3)\n");
+  printf("  -w         Enables line wrap\n");
+  printf("  -x         Enables ENTER as submit key\n");
 }
  
 /* main */
@@ -792,7 +985,7 @@ int main(int argc, char **argv) {
   int op;
   opterr = 0;
  
-  while ((op = getopt(argc, argv, "bghxr:p:o")) != -1) {
+  while ((op = getopt(argc, argv, "bghop:r:wx")) != -1) {
     char *end;
  
     switch (op) {
@@ -834,6 +1027,9 @@ int main(int argc, char **argv) {
       case 'o':
         oflag = 1;
         break;
+      case 'w':
+        wrap = 1;
+        break;
       case '?':
         if (optopt == 'r' || optopt == 'p')
           fprintf(stderr, "Option -%c requires an argument.\n", optopt);
@@ -851,6 +1047,7 @@ int main(int argc, char **argv) {
   /* -o overrides all options */
   if (oflag == 1) {
     ekey = 1;
+    wrap = 0;
     EDITOR_HEIGHT = 1;
     if (pflag == 0) {
       char zp[40] = "* enter submit . ctrl-x cancel *";
@@ -917,7 +1114,7 @@ int main(int argc, char **argv) {
  
   int start_row, start_col;
   get_cursor_position(td, &start_row, &start_col);
- 
+
   tcgetattr(td, &orig_termios);
   struct termios raw = orig_termios;
   /* disable ICRNL, so ENTER (13) won't be changed to CTRL-J (10) */
@@ -931,10 +1128,13 @@ int main(int argc, char **argv) {
     w.ws_row = 24;
   }
   int term_width = w.ws_col;
+
+  int view_width = term_width - start_col + 1;
+    if (view_width < 1) view_width = 1;
  
   /* -r 0 means max height of terminal */
   if (EDITOR_HEIGHT == 0) {
-    EDITOR_HEIGHT = w.ws_row;
+    EDITOR_HEIGHT = w.ws_row - THEIGHT;
   }
   /* if there is not enough space for EDITOR_HEIGHT + status (1 line) */
   int needed_total = EDITOR_HEIGHT + THEIGHT;
@@ -1050,9 +1250,12 @@ int main(int argc, char **argv) {
       } else if (seq0 == '[') {
         unsigned char seq1 = 0;
         if (in_wait_byte(&in, &seq1, 50)) {
+
           if (seq1 == 'A') {
             /* UP */
-            if (byte_pos > 0) {
+            if (wrap) {
+              byte_pos = move_visual_up(buf, byte_pos, view_width);
+            } else if (byte_pos > 0) {
               size_t cur_start = byte_pos;
               while (cur_start > 0 && buf->data[cur_start - 1] != '\n') {
                 cur_start--;
@@ -1084,35 +1287,39 @@ int main(int argc, char **argv) {
             }
           } else if (seq1 == 'B') {
             /* DOWN */
-            size_t cur_start = byte_pos;
-            while (cur_start > 0 && buf->data[cur_start - 1] != '\n') {
-              cur_start--;
-            }
-            size_t p = byte_pos;
-            while (p < buf->length && buf->data[p] != '\n') p++;
-            if (p < buf->length) {
-              int target_col = get_col_at(buf->data, buf->length, 
-                                          cur_start, byte_pos);
-              size_t next_start = p + 1;
-              size_t next_end = next_start;
-              while (next_end < buf->length && buf->data[next_end] != '\n') {
-                next_end++;
-              }
-              size_t final_p = next_start;
-              int count = 0;
-              while (final_p < next_end) {
-                int cw = 0;
-                size_t glen = utf8_next_grapheme(buf->data, next_end, 
-                                                 final_p, &cw);
-                if (glen == 0) break;
-                if (cw > 0 && count + cw > target_col) break;
-                if (count >= target_col && cw == 0) break;
-                count += cw;
-                final_p += glen;
-              }
-              byte_pos = final_p;
+            if (wrap) {
+              byte_pos = move_visual_down(buf, byte_pos, view_width);
             } else {
-              byte_pos = buf->length;
+              size_t cur_start = byte_pos;
+              while (cur_start > 0 && buf->data[cur_start - 1] != '\n') {
+                cur_start--;
+              }
+              size_t p = byte_pos;
+              while (p < buf->length && buf->data[p] != '\n') p++;
+              if (p < buf->length) {
+                int target_col = get_col_at(buf->data, buf->length, 
+                                            cur_start, byte_pos);
+                size_t next_start = p + 1;
+                size_t next_end = next_start;
+                while (next_end < buf->length && buf->data[next_end] != '\n') {
+                  next_end++;
+                }
+                size_t final_p = next_start;
+                int count = 0;
+                while (final_p < next_end) {
+                  int cw = 0;
+                  size_t glen = utf8_next_grapheme(buf->data, next_end, 
+                                                   final_p, &cw);
+                  if (glen == 0) break;
+                  if (cw > 0 && count + cw > target_col) break;
+                  if (count >= target_col && cw == 0) break;
+                  count += cw;
+                  final_p += glen;
+                }
+                byte_pos = final_p;
+              } else {
+                byte_pos = buf->length;
+              }
             }
           } else if (seq1 == 'C') {
             /* RIGHT */
