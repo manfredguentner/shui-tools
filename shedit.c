@@ -1121,6 +1121,7 @@ int main(int argc, char **argv) {
   raw.c_iflag &= ~(ICRNL);
   raw.c_lflag &= ~(ICANON | ECHO | ISIG);
   tcsetattr(td, TCSANOW, &raw);
+  write_all(td, "\033[?2004h", 8);
  
   struct winsize w = {0};
   if (ioctl(td, TIOCGWINSZ, &w) == -1 || w.ws_col == 0) {
@@ -1163,6 +1164,8 @@ int main(int argc, char **argv) {
   InputBuf in = { td, {0}, 0, 0 };
   size_t byte_pos = 0;
   int need_status = 1;
+  int in_paste = 0;
+  int paste_last_cr = 0;
  
   render(td, frame, buf, start_row, start_col, byte_pos, 
          term_width, status_prompt, need_status, bflag);
@@ -1172,19 +1175,40 @@ int main(int argc, char **argv) {
   while (running) {
     unsigned char uc = 0;
     if (in_read_byte(&in, &uc) <= 0) break;
+
+    if (in_paste && uc != 10) {
+      paste_last_cr = 0;
+    }
  
-    if ((oflag == 0) && (uc == 3 || uc == 4)) {
+    if (in_paste && (uc == 13 || uc == 10)) {
+      if (uc == 13) {
+        if (oflag == 0) {
+          insert_at(buf, byte_pos, "\n");
+          byte_pos += 1;
+        }
+        paste_last_cr = 1;
+      } else { /* uc == 10 */
+        if (paste_last_cr) {
+          paste_last_cr = 0;
+        } else if (oflag == 0) {
+          insert_at(buf, byte_pos, "\n");
+          byte_pos += 1;
+        }
+      }
+    } else if (!in_paste && (oflag == 0) && (uc == 3 || uc == 4)) {
       running = 0;
-    } else if (oflag == 0 && uc == 5) {
+    } else if (!in_paste && oflag == 0 && uc == 5) {
+      write_all(td, "\033[?2004l", 8);
       if (call_editor(buf, td, &orig_termios) == -1) {
         escaped = 1;
         running = 0;
       } else {
+        write_all(td, "\033[?2004h", 8);
         in.pos = in.len = 0;
         byte_pos = clamp_byte_pos(buf, byte_pos);
         need_status = 1;
       }
-    } else if (uc == 24) {
+    } else if (!in_paste && uc == 24) {
       /* CTRL-X is cancel */
       escaped = 1;
       running = 0;
@@ -1197,7 +1221,7 @@ int main(int argc, char **argv) {
       } else {
         running = 0;
       }
-    } else if (oflag == 0 && uc == 10) {
+    } else if (!in_paste && oflag == 0 && uc == 10) {
       /* CTRL-J: New empty row below the current row */
       size_t p = byte_pos;
       while (p < buf->length && buf->data[p] != '\n') p++;
@@ -1205,11 +1229,11 @@ int main(int argc, char **argv) {
       if (p < buf->length && buf->data[p] == '\n') {
         insert_at(buf, p + 1, "\n");
         byte_pos = p + 1;
-      }else {
+      } else {
         insert_at(buf, p, "\n");
         byte_pos = p + 1;
       }
-    } else if (uc == 127 || uc == 8) {
+    } else if (!in_paste && (uc == 127 || uc == 8)) {
       if (byte_pos > 0) {
         size_t ls = byte_pos;
         while (ls > 0 && buf->data[ls - 1] != '\n') ls--;
@@ -1225,134 +1249,162 @@ int main(int argc, char **argv) {
       }
     } else if (uc == 27) {
       unsigned char seq0 = 0;
-      if (!in_wait_byte(&in, &seq0, 200)) {
-        unsigned char c1 = 0;
-        if (in_wait_byte(&in, &c1, 1500)) {
-          if (c1 == 'x' || c1 == 'q') {
-            escaped = 1;
-            running = 0;
-          } else if (oflag == 0 && c1 == 'd') {
-            running = 0;
-          } else if (oflag == 0 && c1 == 'e') {
-            if (call_editor(buf, td, &orig_termios) == -1) {
+      if (!in_wait_byte(&in, &seq0, in_paste ? 20 : 200)) {
+        if (!in_paste) {
+          unsigned char c1 = 0;
+          if (in_wait_byte(&in, &c1, 1500)) {
+            if (c1 == 'x' || c1 == 'q') {
               escaped = 1;
               running = 0;
-            } else {
-              in.pos = in.len = 0;
-              byte_pos = clamp_byte_pos(buf, byte_pos);
-              need_status = 1;
+            } else if (oflag == 0 && c1 == 'd') {
+              running = 0;
+            } else if (oflag == 0 && c1 == 'e') {
+              write_all(td, "\033[?2004l", 8);
+              if (call_editor(buf, td, &orig_termios) == -1) {
+                escaped = 1;
+                running = 0;
+              } else {
+                write_all(td, "\033[?2004h", 8);
+                in.pos = in.len = 0;
+                byte_pos = clamp_byte_pos(buf, byte_pos);
+                need_status = 1;
+              }
             }
+          } else {
+            escaped = 1;
+            running = 0;
           }
-        } else {
-          escaped = 1;
-          running = 0;
         }
       } else if (seq0 == '[') {
         unsigned char seq1 = 0;
         if (in_wait_byte(&in, &seq1, 50)) {
-
-          if (seq1 == 'A') {
-            /* UP */
-            if (wrap) {
-              byte_pos = move_visual_up(buf, byte_pos, view_width);
-            } else if (byte_pos > 0) {
-              size_t cur_start = byte_pos;
-              while (cur_start > 0 && buf->data[cur_start - 1] != '\n') {
-                cur_start--;
-              }
-              if (cur_start > 0) {
-                int target_col = get_col_at(buf->data, buf->length, 
-                                            cur_start, byte_pos);
-                size_t prev_end = cur_start - 1;
-                size_t prev_start = prev_end;
-                while (prev_start > 0 && buf->data[prev_start - 1] != '\n') {
-                  prev_start--;
-                }
-                size_t final_p = prev_start;
-                int count = 0;
-                while (final_p < prev_end) {
-                  int cw = 0;
-                  size_t glen = utf8_next_grapheme(buf->data, prev_end, 
-                                                   final_p, &cw);
-                  if (glen == 0) break;
-                  if (cw > 0 && count + cw > target_col) break;
-                  if (count >= target_col && cw == 0) break;
-                  count += cw;
-                  final_p += glen;
-                }
-                byte_pos = final_p;
+          if (seq1 >= '0' && seq1 <= '9') {
+            int param = seq1 - '0';
+            unsigned char ch = 0;
+            while (in_wait_byte(&in, &ch, 50)) {
+              if (ch >= '0' && ch <= '9') {
+                param = param * 10 + (ch - '0');
               } else {
-                byte_pos = 0;
+                break;
               }
             }
-          } else if (seq1 == 'B') {
-            /* DOWN */
-            if (wrap) {
-              byte_pos = move_visual_down(buf, byte_pos, view_width);
-            } else {
-              size_t cur_start = byte_pos;
-              while (cur_start > 0 && buf->data[cur_start - 1] != '\n') {
-                cur_start--;
-              }
-              size_t p = byte_pos;
-              while (p < buf->length && buf->data[p] != '\n') p++;
-              if (p < buf->length) {
-                int target_col = get_col_at(buf->data, buf->length, 
-                                            cur_start, byte_pos);
-                size_t next_start = p + 1;
-                size_t next_end = next_start;
-                while (next_end < buf->length && buf->data[next_end] != '\n') {
-                  next_end++;
-                }
-                size_t final_p = next_start;
-                int count = 0;
-                while (final_p < next_end) {
-                  int cw = 0;
-                  size_t glen = utf8_next_grapheme(buf->data, next_end, 
-                                                   final_p, &cw);
-                  if (glen == 0) break;
-                  if (cw > 0 && count + cw > target_col) break;
-                  if (count >= target_col && cw == 0) break;
-                  count += cw;
-                  final_p += glen;
-                }
-                byte_pos = final_p;
-              } else {
-                byte_pos = buf->length;
+            if (ch == '~') {
+              if (param == 200) {
+                in_paste = 1;
+                paste_last_cr = 0;
+              } else if (param == 201) {
+                in_paste = 0;
+                paste_last_cr = 0;
               }
             }
-          } else if (seq1 == 'C') {
-            /* RIGHT */
-            if (byte_pos < buf->length) {
-              byte_pos += utf8_next_grapheme(buf->data, buf->length, 
-                                             byte_pos, NULL);
-            }
-          } else if (seq1 == 'D') {
-            /* LEFT */
-            if (byte_pos > 0) {
-              size_t ls = byte_pos;
-              while (ls > 0 && buf->data[ls - 1] != '\n') ls--;
-              if (byte_pos > ls) {
-                byte_pos = utf8_prev_grapheme(buf->data, ls, byte_pos);
+          } else if (!in_paste) {
+            if (seq1 == 'A') {
+              /* UP */
+              if (wrap) {
+                byte_pos = move_visual_up(buf, byte_pos, view_width);
+              } else if (byte_pos > 0) {
+                size_t cur_start = byte_pos;
+                while (cur_start > 0 && buf->data[cur_start - 1] != '\n') {
+                  cur_start--;
+                }
+                if (cur_start > 0) {
+                  int target_col = get_col_at(buf->data, buf->length, 
+                                              cur_start, byte_pos);
+                  size_t prev_end = cur_start - 1;
+                  size_t prev_start = prev_end;
+                  while (prev_start > 0 && buf->data[prev_start - 1] != '\n') {
+                    prev_start--;
+                  }
+                  size_t final_p = prev_start;
+                  int count = 0;
+                  while (final_p < prev_end) {
+                    int cw = 0;
+                    size_t glen = utf8_next_grapheme(buf->data, prev_end, 
+                                                     final_p, &cw);
+                    if (glen == 0) break;
+                    if (cw > 0 && count + cw > target_col) break;
+                    if (count >= target_col && cw == 0) break;
+                    count += cw;
+                    final_p += glen;
+                  }
+                  byte_pos = final_p;
+                } else {
+                  byte_pos = 0;
+                }
+              }
+            } else if (seq1 == 'B') {
+              /* DOWN */
+              if (wrap) {
+                byte_pos = move_visual_down(buf, byte_pos, view_width);
               } else {
-                byte_pos--;
+                size_t cur_start = byte_pos;
+                while (cur_start > 0 && buf->data[cur_start - 1] != '\n') {
+                  cur_start--;
+                }
+                size_t p = byte_pos;
+                while (p < buf->length && buf->data[p] != '\n') p++;
+                if (p < buf->length) {
+                  int target_col = get_col_at(buf->data, buf->length, 
+                                              cur_start, byte_pos);
+                  size_t next_start = p + 1;
+                  size_t next_end = next_start;
+                  while (next_end < buf->length && buf->data[next_end] != '\n') {
+                    next_end++;
+                  }
+                  size_t final_p = next_start;
+                  int count = 0;
+                  while (final_p < next_end) {
+                    int cw = 0;
+                    size_t glen = utf8_next_grapheme(buf->data, next_end, 
+                                                     final_p, &cw);
+                    if (glen == 0) break;
+                    if (cw > 0 && count + cw > target_col) break;
+                    if (count >= target_col && cw == 0) break;
+                    count += cw;
+                    final_p += glen;
+                  }
+                  byte_pos = final_p;
+                } else {
+                  byte_pos = buf->length;
+                }
+              }
+            } else if (seq1 == 'C') {
+              /* RIGHT */
+              if (byte_pos < buf->length) {
+                byte_pos += utf8_next_grapheme(buf->data, buf->length, 
+                                               byte_pos, NULL);
+              }
+            } else if (seq1 == 'D') {
+              /* LEFT */
+              if (byte_pos > 0) {
+                size_t ls = byte_pos;
+                while (ls > 0 && buf->data[ls - 1] != '\n') ls--;
+                if (byte_pos > ls) {
+                  byte_pos = utf8_prev_grapheme(buf->data, ls, byte_pos);
+                } else {
+                  byte_pos--;
+                }
               }
             }
           }
         }
-      } else if (seq0 == 'x' || seq0 == 'q') {
-        escaped = 1;
-        running = 0;
-      } else if (seq0 == 'd') {
-        running = 0;
-      } else if (seq0 == 'e') {
-        if (call_editor(buf, td, &orig_termios) == -1) {
+      } else if (!in_paste) {
+        if (seq0 == 'x' || seq0 == 'q') {
           escaped = 1;
           running = 0;
-        } else {
-          in.pos = in.len = 0;
-          byte_pos = clamp_byte_pos(buf, byte_pos);
-          need_status = 1;
+        } else if (seq0 == 'd') {
+          running = 0;
+        } else if (seq0 == 'e') {
+          write_all(td, "\033[?2004l", 8);
+          if (call_editor(buf, td, &orig_termios) == -1) {
+            escaped = 1;
+            running = 0;
+          } else {
+            write_all(td, "\033[?2004h", 8);
+            in.pos = in.len = 0;
+            byte_pos = clamp_byte_pos(buf, byte_pos);
+            need_status = 1;
+          }
         }
       }
     } else if (uc == '\t') {
@@ -1399,6 +1451,7 @@ int main(int argc, char **argv) {
  
   /* Cleanup */
   frame->length = 0;
+  buf_append(frame, "\033[?2004l", 8);
   buf_append(frame, "\033[?2026h\033[?25l", 14);
   int r;
   for (r = 0; r < EDITOR_HEIGHT + THEIGHT; r++) {

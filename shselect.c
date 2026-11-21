@@ -175,23 +175,6 @@ cp_width(uint32_t cp) {
   return 1;
 }
 
-static size_t
-get_utf8_len(const char *s, size_t pos) {
-  unsigned char c = (unsigned char)s[pos];
-  if (c < 0x80) return 1;
-  if ((c & 0xE0) == 0xC0) return 2;
-  if ((c & 0xF0) == 0xE0) return 3;
-  if ((c & 0xF8) == 0xF0) return 4;
-  return 1;
-}
-
-static int
-get_visual_width(const char *s, size_t pos) {
-  unsigned char c = (unsigned char)s[pos];
-  if ((c & 0xF8) == 0xF0) return 2;
-  return 1;
-}
-
 static void
 write_truncated(int fd, const char *text, size_t avail_cols) {
   if (avail_cols == 0) {
