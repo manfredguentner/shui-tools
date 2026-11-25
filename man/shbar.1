@@ -1,62 +1,108 @@
-.TH shbar 1 "2026-11-18" "shbar 1.0" "terminal status, header and divider bar"
+.TH SHBAR 1 "2026-11-18" "shbar 1.0" "User Commands"
+
 .SH NAME
 shbar \- a divider and status or header bar for the terminal
+
 .SH SYNOPSIS
 .B shbar
-.RB [ \-bh ]
-.RB [ \-c
-.IR char ]
-.RB [ \-p
-.IR text ]
+.RB [ \-bhilmnruv ]
+.RB [ \-c\ char ]
+.RB [ \-p\ text ]
+
 .SH DESCRIPTION
 .B shbar
-is a small C program that can be used as a visual divider, header, or bottom bar.
-It always fills to the end of the terminal's width.
-.PP
-There are some minimal options to customize it.
-.PP
+is a small C program that can be used as a visual divider, header,
+or bottom status bar in a terminal.
+
+The generated bar always extends to the current terminal width.
+
+Several options are available for customizing the appearance and
+alignment of the bar text.
+
 .B shbar
 is part of the
-.I shui\-tools
+.B shui-tools
 collection.
+
 .SH OPTIONS
 .TP
 .B \-b
-Turn on reverse video for
-.B \-p
-.IR text .
+Display bar text in bold.
+
 .TP
-.BI \-c " char"
+.BI "\-c " char
 Use a different filler character.
-The default is an underscore
-.RB ( _ ).
-A space character
-.RB ( \(dq\ \(dq )
-is also possible.
+The default filler is a space character.
+
 .TP
 .B \-h
 Show a short usage message.
-.TP
-.BI \-p " text"
-Display
-.I text
-as a prompt.
-.SH EXAMPLES
-.EX
-status="[ load 3% : t/sec 49 : source.c ] "
-shbar \-p "${status}"
 
-shbar \-bp "Result as follows: " \-c " "
-cat result.txt | less \-r +G
-.EE
+.TP
+.B \-i
+Display bar text in italic.
+
+.TP
+.B \-l
+Left align the text.
+
+.TP
+.B \-m
+Pad only half of the terminal width.
+
+.TP
+.B \-n
+Return
+.IR columns \- length_of_text .
+
+.TP
+.BI "\-p " text
+Text displayed within the bar.
+
+.TP
+.B \-r
+Right align the text.
+
+.TP
+.B \-u
+Display bar text underlined.
+
+.TP
+.B \-v
+Display bar text in reverse video.
+
+.SH EXAMPLES
+Display a status bar:
+
+.PP
+.nf
+status="[ load 3% : t/sec 49 : source.c ] "
+shbar -p "${status}"
+.fi
+
+.PP
+Display a bold heading before showing output:
+
+.PP
+.nf
+shbar -bp "Result as follows: " -c " "
+cat result.txt | less -r +G
+.fi
+
 .SH BUGS
 Probably.
+
 .SH AUTHOR
-Written by Manfred G\[:u]ntner.
+Written by Manfred Güntner.
+
 .SH REPORTING BUGS
 .UR https://github.com/manfredguentner/shui-tools/issues
+https://github.com/manfredguentner/shui-tools/issues
 .UE
+
 .SH COPYRIGHT
-Copyright \(co 2026 Manfred G\[:u]ntner
-.br
-This software is distributed under the BSD 2\-Clause License; see the LICENSE file.
+Copyright \(co 2026 Manfred Güntner.
+
+This software is distributed under the BSD 2-Clause License.
+See the LICENSE file for details.
+
