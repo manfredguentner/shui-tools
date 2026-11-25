@@ -1,133 +1,154 @@
-.TH SHSELECT 1 "2026-11-17" "shselect 1.0" "User Commands"
+.TH SHSELECT 1 "17.11.2026" "shselect 1.0" "User Commands"
+
 .SH NAME
 shselect \- terminal selector and pager
+
 .SH SYNOPSIS
 .B shselect
-[\fB\-bcghmnsv\fR]
-[\fB\-r\fR \fIlines\fR]
-[\fB\-p\fR \fItext\fR]
+.RB [ \-bcghlmnsv ]
+.RB [ \-r\ height ]
+.RB [ \-p\ text ]
+
 .SH DESCRIPTION
 .B shselect
-is a pager and selector. It reads input from a pipe or stdin and
-displays the content in an interactive terminal interface. The user
-can move through the list, select entries, and return the selected
+is a pager and selector.
+It reads input from a pipe or standard input and displays the content in an
+interactive terminal interface.
+The user can move through the list, select entries, and return the selected
 line(s) or line number(s) to the calling script.
-.PP
-The tool is intended for use in POSIX shell scripts where an
-interactive selector is useful. Depending on the options,
+
+The tool is intended for use in POSIX shell scripts where an interactive
+selector is useful.
+Depending on the options,
 .B shselect
-can return selected lines, their line numbers, or both. When
-multiselect mode is enabled, multiple entries may be marked and
-returned.
-.PP
+can return selected lines, their line numbers, or both.
+When multiselect mode is enabled, multiple entries may be marked and returned.
+
 .B shselect
-is part of the shui-tools collection.
+is part of the
+.B shui-tools
+package.
+
 .SH OPTIONS
 .TP
 .B \-b
 Display the bottom bar in reverse video.
+
 .TP
 .B \-c
-Show the cursor in the first column instead of a reverse-video line.
+Show cursor in first column instead of reverse video line.
+
 .TP
 .B \-g
 Disable the bottom bar.
+
 .TP
 .B \-h
 Show usage information.
+
+.TP
+.B \-l
+Behave like an ANSI code aware pager.
+
 .TP
 .B \-m
-Enable multiselect mode. When enabled, entries may be marked or
-unmarked.
+Enable multiselect mode.
+When enabled, entries may be marked or unmarked.
+
 .TP
 .B \-n
 Return only the line number of the selected entry.
+
 .TP
-\fB\-p\fR \fItext\fR
+.BI "\-p " text
 Set the bottom bar text.
+
 .TP
-\fB\-r\fR \fIlines\fR
+.BI "\-r " lines
 Set the height of the selection area in lines.
-A value of 0 uses the entire terminal height. The default is 4.
+A value of 0 uses the entire terminal height.
+The default is 4.
+
 .TP
 .B \-s
 Return only the selected line itself.
-By default (without \fB\-n\fR or \fB\-s\fR), both the line number
-and the line content are returned.
+
+By default, both the line number and the line content are returned.
+
 .TP
 .B \-v
-When exiting with \fBx\fR or \fBq\fR, also return the line the cursor
-was on.
+Leaving with
+.B x
+or
+.B q
+also returns the string the cursor was on.
+
 .SH INTERACTIVE KEYS
 While viewing a list, the following keys are available:
-.RS 4
-.TP 19
-.B Right, PageDown
-Move forward one window.
-.TP
-.B Left, PageUp
-Move backward one window.
-.TP
-.B Down
-Move down one line.
-.TP
-.B Up
-Move up one line.
-.TP
-.B Home
-Move to the first line.
-.TP
-.B End
-Move to the last line.
-.TP
-.B Enter
-Select and exit.
-.TP
-.B q
-Exit without selection (return 0).
-.TP
+
+.TS
+tab(|);
+l l.
+Right, PageDown|Move forward one window
+Left, PageUp|Move backward one window
+Down|Move down one line
+Up|Move up one line
+HOME|Move to first line
+END|Move to last line
+_
+Enter|Select and exit
+q|Exit without selection (return 0)
+x|Exit without selection (return 10)
+m, s, +|Toggle mark (multiselect mode only)
+.TE
+
+Exiting with
 .B x
-Exit without selection (return 10).
-.TP
-.B m, s, +
-Toggle mark (multiselect mode only).
-.RE
-.PP
-Exiting with \fBx\fR returns 10 and can be used as a \(lqgo back\(rq
-signal in scripts.
+returns 10 and can be used as a "go back" signal in scripts.
+
 .SH EXAMPLES
 Select a file from a directory listing:
+
 .PP
-.RS 4
 .nf
-ls \-a . | shselect \-s
+ls -a . | shselect -s
 .fi
-.RE
-.PP
+
 Select from a list of strings:
+
 .PP
-.RS 4
 .nf
-printf "%s\en%s\en%s\en" "One" "Two" "Three" | shselect \-sb
+printf "%s\\n%s\\n%s\\n" "One" "Two" "Three" | shselect -sb
 .fi
-.RE
-.PP
+
 Possible usage in a shell script:
+
 .PP
-.RS 4
 .nf
-key=$(printf "${radiostations}" | shselect \-bs)
+key=$(printf "${radiostations}" | shselect -bs)
 .fi
-.RE
+
+Use as a pager:
+
+.PP
+.nf
+shselect -l < file.txt
+.fi
+
 .SH BUGS
 Probably.
+
 .SH AUTHOR
-Written by Manfred G\(:untner.
+Written by Manfred Güntner.
+
 .SH REPORTING BUGS
+.UR https://github.com/manfredguentner/shui-tools/issues
 https://github.com/manfredguentner/shui-tools/issues
+.UE
+
 .SH COPYRIGHT
-Copyright \(co 2026 Manfred G\(:untner.
-.br
-This software is distributed under the BSD 2-Clause License; see
-the LICENSE file.
+Copyright \(co 2026 Manfred Güntner.
+
+This software is distributed under the BSD 2-Clause License; see the
+LICENSE file.
 
